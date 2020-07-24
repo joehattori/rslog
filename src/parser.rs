@@ -1,32 +1,39 @@
 use nom::character::complete::{alpha1, alphanumeric1, digit1};
 use nom::error::ErrorKind;
-use nom::{delimited, do_parse, eof, is_not, many_till, map_res, named, tag};
+use nom::{delimited, do_parse, eof, is_not, many_till, map, map_res, named, opt, tag};
 use nom::{Err, IResult};
 
-use crate::expr::{CombinedTerm, Constant, Expr, Query, Term};
+use crate::expr::{Constant, Query, Rule, Term};
 use crate::util::first_char;
 
-named!(parse_const_int<&str, i32>, map_res!(digit1, |s: &str| s.parse::<i32>()));
-named!(parse_const_str<&str, &str>, delimited!(tag!("\""), is_not!("\""), tag!("\"")));
+named!(
+    parse_const_int<&str, Constant>,
+    do_parse!(
+        i: map_res!(digit1, |s: &str| s.parse::<i32>()) >>
+        (Constant::Int(i))
+    )
+);
 
-fn parse_const_name(s: &str) -> IResult<&str, &str> {
+named!(
+    parse_const_str<&str, Constant>,
+    do_parse!(
+        s: delimited!(tag!("\""), is_not!("\""), tag!("\"")) >>
+        (Constant::Str(s.to_string()))
+    )
+);
+
+fn parse_const_name(s: &str) -> IResult<&str, Constant> {
     if first_char(s).is_lowercase() {
-        alphanumeric1(s)
+        alphanumeric1(s).and_then(|(i, n)| Ok((i, Constant::Name(n.to_string()))))
     } else {
         Err(Err::Error(("var", ErrorKind::NoneOf)))
     }
 }
 
 fn parse_const(s: &str) -> IResult<&str, Constant> {
-    if let Ok((i, o)) = parse_const_int(s) {
-        Ok((i, Constant::Int(o)))
-    } else if let Ok((i, o)) = parse_const_str(s) {
-        Ok((i, Constant::Str(o.to_string())))
-    } else if let Ok((i, o)) = parse_const_name(s) {
-        Ok((i, Constant::Name(o.to_string())))
-    } else {
-        Err(Err::Error(("const", ErrorKind::NoneOf)))
-    }
+    parse_const_int(s)
+        .or(parse_const_str(s))
+        .or(parse_const_name(s))
 }
 
 fn parse_var(s: &str) -> IResult<&str, &str> {
@@ -39,7 +46,7 @@ fn parse_var(s: &str) -> IResult<&str, &str> {
 
 fn parse_term(s: &str) -> IResult<&str, Term> {
     if let Ok((i, o)) = parse_combined(s) {
-        Ok((i, Term::Combined(o)))
+        Ok((i, o))
     } else if let Ok((i, o)) = parse_const(s) {
         Ok((i, Term::Const(o)))
     } else if let Ok((i, o)) = parse_var(s) {
@@ -49,6 +56,7 @@ fn parse_term(s: &str) -> IResult<&str, Term> {
     }
 }
 
+// TODO: bad code. Clean up with do_parse! and opt!
 fn parse_terms(s: &str) -> IResult<&str, Vec<Term>> {
     let mut v = Vec::new();
     let mut i = s;
@@ -70,26 +78,6 @@ fn parse_terms(s: &str) -> IResult<&str, Vec<Term>> {
 named!(parse_comma<&str, &str>, tag!(","));
 named!(parse_dot<&str, &str>, tag!("."));
 
-fn parse_args(s: &str) -> IResult<&str, Vec<Term>> {
-    let mut i = s;
-    let mut v = Vec::new();
-    loop {
-        match parse_term(i) {
-            Ok((ni, term)) => {
-                v.push(term);
-                i = ni;
-            }
-            Err(e) => return Err(e),
-        }
-        match parse_comma(i) {
-            Ok((ni, _)) => i = ni,
-            Err(_) => return Ok((i, v)),
-        }
-    }
-}
-
-named!(parse_paren<&str, &str>, delimited!(tag!("("), is_not!(")"), tag!(")")));
-
 fn parse_functor(s: &str) -> IResult<&str, &str> {
     if first_char(s).is_lowercase() {
         alpha1(s)
@@ -98,37 +86,18 @@ fn parse_functor(s: &str) -> IResult<&str, &str> {
     }
 }
 
+named!(parse_paren_args<&str, Vec<Term>>, delimited!(tag!("("), parse_terms, tag!(")")));
+
 named!(
-    parse_combined<&str, CombinedTerm>,
+    parse_combined<&str, Term>,
     do_parse!(
         functor: parse_functor >>
-        args: map_res!(parse_paren, parse_args) >>
-        (CombinedTerm{functor: functor.to_string(), args: args.1})
+        args: parse_paren_args >>
+        (Term::Combined{functor: functor.to_string(), args: args})
     )
 );
 
-fn parse_combined_terms(s: &str) -> IResult<&str, Vec<CombinedTerm>> {
-    let mut v = Vec::new();
-    let mut i = s;
-    loop {
-        match parse_combined(i) {
-            Ok((ni, c)) => {
-                i = ni;
-                v.push(c);
-            }
-            Err(e) => return Err(e),
-        }
-        match parse_comma(i) {
-            Ok((ni, _)) => i = ni,
-            Err(_) => return Ok((i, v)),
-        }
-    }
-}
-
-named!(
-    parse_file_name<&str, &str>,
-    delimited!(tag!("['"), is_not!("']"), tag!("']"))
-);
+named!(parse_file_name<&str, &str>, delimited!(tag!("['"), is_not!("']"), tag!("']")));
 
 pub fn parse_query(input: &str) -> Result<Query, Err<(&str, ErrorKind)>> {
     if let Ok((i, o)) = parse_file_name(input) {
@@ -147,27 +116,27 @@ pub fn parse_query(input: &str) -> Result<Query, Err<(&str, ErrorKind)>> {
 }
 
 named!(
-    parse_fact<&str, Expr>,
-    do_parse!(
-        combined: parse_combined >>
-        parse_dot >>
-        (Expr::Fact (combined))
+    parse_rhs<&str, Vec<Term>>,
+    map!(
+        opt!(
+            do_parse!(
+                tag!(":-") >>
+                terms: parse_terms >>
+                (terms)
+            )
+        ),
+        |t| t.unwrap_or(Vec::new())
     )
 );
 
 named!(
-    parse_rule<&str, Expr>,
+    parse_rule<&str, Rule>,
     do_parse!(
-        lhs: parse_combined >>
-        tag!(":-") >>
-        rhs: parse_combined_terms >>
+        lhs: parse_term >>
+        rhs: parse_rhs >>
         parse_dot >>
-        (Expr::Rule { lhs, rhs })
+        (Rule { lhs, rhs })
     )
 );
 
-fn parse_expr(s: &str) -> IResult<&str, Expr> {
-    parse_fact(s).or(parse_rule(s))
-}
-
-named!(pub parse_file_content<&str, (Vec<Expr>, &str)>, many_till!(parse_expr, eof!()));
+named!(pub parse_file_content<&str, (Vec<Rule>, &str)>, many_till!(parse_rule, eof!()));

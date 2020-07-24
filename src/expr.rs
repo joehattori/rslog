@@ -8,7 +8,7 @@ pub enum Query {
 pub enum Term {
     Const(Constant),
     Var(String),
-    Combined(CombinedTerm),
+    Combined { functor: String, args: Vec<Term> },
 }
 
 #[derive(Clone, Debug)]
@@ -19,16 +19,7 @@ pub enum Constant {
 }
 
 #[derive(Clone, Debug)]
-pub struct CombinedTerm {
-    pub functor: String,
-    pub args: Vec<Term>,
-}
-
-#[derive(Clone, Debug)]
-pub enum Expr {
-    Fact(CombinedTerm),
-    Rule {
-        lhs: CombinedTerm,
-        rhs: Vec<CombinedTerm>,
-    },
+pub struct Rule {
+    pub lhs: Term,
+    pub rhs: Vec<Term>,
 }
