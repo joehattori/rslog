@@ -6,6 +6,8 @@ use nom::{Err, IResult};
 use crate::expr::{Constant, Query, Rule, Term};
 use crate::util::first_char;
 
+const RULE_VAR_PREFIX: &'static str = "rule_";
+
 named!(
     parse_const_int<&str, Constant>,
     do_parse!(
@@ -26,34 +28,27 @@ fn parse_const_name(s: &str) -> IResult<&str, Constant> {
     if first_char(s).is_lowercase() {
         alphanumeric1(s).and_then(|(i, n)| Ok((i, Constant::Name(n.to_string()))))
     } else {
-        Err(Err::Error(("var", ErrorKind::NoneOf)))
+        Err(Err::Error(("var", ErrorKind::AlphaNumeric)))
     }
 }
 
-fn parse_const(s: &str) -> IResult<&str, Constant> {
+fn parse_const(s: &str) -> IResult<&str, Term> {
     parse_const_int(s)
         .or(parse_const_str(s))
         .or(parse_const_name(s))
+        .and_then(|(i, c)| Ok((i, Term::Const(c))))
 }
 
-fn parse_var(s: &str) -> IResult<&str, &str> {
+fn parse_var(s: &str) -> IResult<&str, Term> {
     if first_char(s).is_uppercase() {
-        alpha1(s)
+        alpha1(s).and_then(|(i, s)| Ok((i, Term::Var(RULE_VAR_PREFIX.to_string() + s))))
     } else {
-        Err(Err::Error(("var", ErrorKind::NoneOf)))
+        Err(Err::Error(("var", ErrorKind::Alpha)))
     }
 }
 
 fn parse_term(s: &str) -> IResult<&str, Term> {
-    if let Ok((i, o)) = parse_combined(s) {
-        Ok((i, o))
-    } else if let Ok((i, o)) = parse_const(s) {
-        Ok((i, Term::Const(o)))
-    } else if let Ok((i, o)) = parse_var(s) {
-        Ok((i, Term::Var(o.to_string())))
-    } else {
-        Err(Err::Error(("term", ErrorKind::NoneOf)))
-    }
+    parse_combined(s).or(parse_const(s)).or(parse_var(s))
 }
 
 // TODO: bad code. Clean up with do_parse! and opt!
@@ -82,7 +77,7 @@ fn parse_functor(s: &str) -> IResult<&str, &str> {
     if first_char(s).is_lowercase() {
         alpha1(s)
     } else {
-        Err(Err::Error(("functor", ErrorKind::NoneOf)))
+        Err(Err::Error(("functor", ErrorKind::Alpha)))
     }
 }
 
