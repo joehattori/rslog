@@ -7,6 +7,8 @@ pub mod util;
 use std::io::{stdin, stdout, Write};
 
 use crate::app::{App, Status};
+use crate::expr::Term;
+use crate::unifier::search;
 
 const PROMPT: &'static str = "?- ";
 const HALT_MESSAGE: &'static str = "halt.";
@@ -27,16 +29,16 @@ fn main() {
         let Status { done, subst } = app.handle_query(&input);
         if done {
             println!("true.");
-            println!("var_to_term {:?}", subst);
-            //app.asked_vars
-            //.iter()
-            //.for_each(|var| println!("{} = {:?}", var, substs.get(var)));
+            app.asked_vars.iter().for_each(|var| {
+                println!("{} = {:?}", var, search(&Term::Var(var.clone()), &subst))
+            });
             app.asked_vars.clear();
         } else {
-            println!("{:?}", subst);
-            //app.asked_vars
-            //.iter()
-            //.for_each(|var| println!("{} = {:?}", var, substs.get(var)));
+            println!("subst {:?}", subst);
+            app.asked_vars.iter().for_each(|var| {
+                println!("{} = {:?}", var, search(&Term::Var(var.clone()), &subst))
+            });
+            // TODO: wait for user input.
         }
     }
 }
