@@ -13,12 +13,12 @@ pub struct App {
 
 pub struct QueueItem {
     goals: Vec<Term>,
-    substs: Vec<Subst>,
+    subst: Subst,
 }
 
 pub struct Status {
     pub done: bool,
-    pub var_to_term: HashMap<Variable, Term>,
+    pub subst: Subst,
 }
 
 impl App {
@@ -42,7 +42,7 @@ impl App {
                 self.rules.extend_from_slice(&new_rules);
                 Status {
                     done: true,
-                    var_to_term: HashMap::new(),
+                    subst: HashMap::new(),
                 }
             }
             Query::Terms(terms) => {
@@ -50,40 +50,23 @@ impl App {
                 self.asked_vars.append(&mut Term::free_vars_sum(&terms));
                 self.queue.push_back(QueueItem {
                     goals: terms,
-                    substs: Vec::new(),
+                    subst: HashMap::new(),
                 });
 
-                while let Some(QueueItem { mut goals, substs }) = self.queue.pop_front() {
+                while let Some(QueueItem { mut goals, subst }) = self.queue.pop_front() {
                     println!(
                         "{}\n\tgoals: {:?}\n\trules: {:?}\n\tsubsts: {:?}",
                         self.queue.len(),
                         goals,
                         self.rules,
-                        substs
+                        subst
                     );
                     match &goals.pop() {
                         None => {
-                            let var_to_term: HashMap<Variable, Term> = all_free_vars
-                                .iter()
-                                .cloned()
-                                .map(|var| (var.clone(), Term::Var(var).subst_all(&substs)))
-                                .collect();
-
-                            if var_to_term.iter().any(|(_, term)| term.has_free_var()) {
-                                continue;
-                            }
-                            println!("var_to_term {:?}", var_to_term);
-                            println!("goals {:?}", goals);
-
-                            return Status {
-                                done: false,
-                                var_to_term,
-                            };
+                            return Status { done: false, subst };
                         }
                         Some(goal) => {
                             for rule in self.rules.iter() {
-                                println!("rule {:?}\ngoal {:?}", rule, goal);
-                                //let rule = &rule.reload();
                                 match (goal, &rule.lhs) {
                                     (
                                         Term::Combined {
@@ -98,27 +81,6 @@ impl App {
                                         if f1 != f2 || args1.len() != args2.len() {
                                             continue;
                                         }
-
-                                        let mut constraints: Vec<Constraint> = args1
-                                            .iter()
-                                            .zip(args2.iter())
-                                            .map(|(arg1, arg2)| {
-                                                (arg1.subst_all(&substs), arg2.clone())
-                                            })
-                                            .collect();
-
-                                        println!("const: {:?}", constraints);
-                                        if let Some(mut new_substs) = unify(&mut constraints) {
-                                            println!("unifiable result: {:?}", new_substs);
-                                            let mut goals_to_append: Vec<Term> =
-                                                rule.rhs.iter().cloned().collect();
-
-                                            let mut goals = goals.clone();
-                                            goals.append(&mut goals_to_append);
-                                            let mut substs = substs.clone();
-                                            substs.append(&mut new_substs);
-                                            self.queue.push_back(QueueItem { goals, substs });
-                                        }
                                     }
                                     _ => continue,
                                 }
@@ -129,7 +91,7 @@ impl App {
 
                 Status {
                     done: true,
-                    var_to_term: HashMap::new(),
+                    subst: HashMap::new(),
                 }
             }
         }

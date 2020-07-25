@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::unifier::Subst;
 
 #[derive(Debug)]
@@ -42,45 +44,55 @@ impl Term {
         }
     }
 
-    pub fn subst(&self, subst: &Subst) -> Term {
-        match self {
-            Term::Const(_) => self.clone(),
-            Term::Var(v) => {
-                if *v == subst.var {
-                    subst.term.clone()
-                } else {
-                    self.clone()
-                }
-            }
-            Term::Combined { functor, args } => Term::Combined {
-                functor: functor.clone(),
-                args: args.iter().map(|t| t.subst(subst)).collect(),
-            },
-        }
-    }
-
-    pub fn subst_all(&self, substs: &Vec<Subst>) -> Term {
-        substs
-            .iter()
-            .fold(self.clone(), |term, sub| term.subst(&sub))
-    }
-
-    pub fn reload(&self) -> Term {
-        let subs: Vec<Subst> = self
-            .free_vars()
-            .iter()
-            .map(|v| Subst {
-                var: v.clone(),
-                term: Term::Var(v.clone()),
-            })
-            .collect();
-        self.subst_all(&subs)
-    }
-
     fn add_prefix_to_var(&self) -> Term {
         match self {
             Term::Var(s) => Term::Var("rule_".to_string() + s),
             _ => self.clone(),
+        }
+    }
+
+    // map of vars in self to actuate term.
+    pub fn var_to_term_map(&self, term: &Term) -> Option<Subst> {
+        match self {
+            Term::Var(v) => {
+                let mut map = HashMap::new();
+                map.insert(v.clone(), term.clone());
+                Some(map)
+            }
+            Term::Const(_) => None,
+            Term::Combined { functor, args } => match term {
+                Term::Combined {
+                    functor: functor2,
+                    args: args2,
+                } => {
+                    if functor != functor2 {
+                        None
+                    } else {
+                        args.iter()
+                            .zip(args2.iter())
+                            .fold(Some(HashMap::new()), |ret, (t1, t2)| {
+                                let mut sub_acum = ret?;
+                                match t1.var_to_term_map(t2) {
+                                    Some(sub) => {
+                                        let has_different_value = sub.iter().any(|(v, t)| {
+                                            sub_acum.contains_key(v) && sub_acum.get(v) != Some(t)
+                                        });
+                                        if has_different_value {
+                                            None
+                                        } else {
+                                            sub.iter().for_each(|(v, t)| {
+                                                sub_acum.insert(v.clone(), t.clone());
+                                            });
+                                            Some(sub_acum)
+                                        }
+                                    }
+                                    None => Some(sub_acum),
+                                }
+                            })
+                    }
+                }
+                _ => Some(HashMap::new()),
+            },
         }
     }
 }
@@ -99,18 +111,57 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn reload(&self) -> Rule {
-        Rule {
-            lhs: self.lhs.reload(),
-            rhs: self.rhs.iter().map(|t| t.reload()).collect(),
-        }
-    }
-
     // add prefix "rule_" to vars in term to avoid name collision between query and rule.
     pub fn add_prefix_to_term_var(&self) -> Rule {
         Rule {
             lhs: self.lhs.add_prefix_to_var(),
             rhs: self.rhs.iter().map(|t| t.add_prefix_to_var()).collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_var_to_term_map() {
+        let const_z = Term::Const(Constant::Name("z".to_string()));
+        let s_z = Term::Combined {
+            functor: "s".to_string(),
+            args: vec![const_z.clone()],
+        };
+        let rule_lhs = Term::Combined {
+            functor: "add".to_string(),
+            args: vec![
+                Term::Combined {
+                    functor: "s".to_string(),
+                    args: vec![Term::Var("X".to_string())],
+                },
+                Term::Var("Y".to_string()),
+                Term::Combined {
+                    functor: "s".to_string(),
+                    args: vec![Term::Var("Z".to_string())],
+                },
+            ],
+        };
+        let query = Term::Combined {
+            functor: "add".to_string(),
+            args: vec![s_z.clone(), s_z.clone(), Term::Var("X".to_string())],
+        };
+        let expected = [
+            ("X".to_string(), const_z.clone()),
+            (
+                "Y".to_string(),
+                Term::Combined {
+                    functor: "s".to_string(),
+                    args: vec![const_z.clone()],
+                },
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+        assert_eq!(rule_lhs.var_to_term_map(&query), Some(expected));
     }
 }
