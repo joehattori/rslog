@@ -64,6 +64,25 @@ impl Term {
             .iter()
             .fold(self.clone(), |term, sub| term.subst(&sub))
     }
+
+    pub fn reload(&self) -> Term {
+        let subs: Vec<Subst> = self
+            .free_vars()
+            .iter()
+            .map(|v| Subst {
+                var: v.clone(),
+                term: Term::Var(v.clone()),
+            })
+            .collect();
+        self.subst_all(&subs)
+    }
+
+    fn add_prefix_to_var(&self) -> Term {
+        match self {
+            Term::Var(s) => Term::Var("rule_".to_string() + s),
+            _ => self.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -77,4 +96,21 @@ pub enum Constant {
 pub struct Rule {
     pub lhs: Term,
     pub rhs: Vec<Term>,
+}
+
+impl Rule {
+    pub fn reload(&self) -> Rule {
+        Rule {
+            lhs: self.lhs.reload(),
+            rhs: self.rhs.iter().map(|t| t.reload()).collect(),
+        }
+    }
+
+    // add prefix "rule_" to vars in term to avoid name collision between query and rule.
+    pub fn add_prefix_to_term_var(&self) -> Rule {
+        Rule {
+            lhs: self.lhs.add_prefix_to_var(),
+            rhs: self.rhs.iter().map(|t| t.add_prefix_to_var()).collect(),
+        }
+    }
 }

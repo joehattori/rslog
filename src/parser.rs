@@ -6,8 +6,6 @@ use nom::{Err, IResult};
 use crate::expr::{Constant, Query, Rule, Term};
 use crate::util::first_char;
 
-const RULE_VAR_PREFIX: &'static str = "rule_";
-
 named!(
     parse_const_int<&str, Constant>,
     do_parse!(
@@ -41,7 +39,7 @@ fn parse_const(s: &str) -> IResult<&str, Term> {
 
 fn parse_var(s: &str) -> IResult<&str, Term> {
     if first_char(s).is_uppercase() {
-        alpha1(s).and_then(|(i, s)| Ok((i, Term::Var(RULE_VAR_PREFIX.to_string() + s))))
+        alpha1(s).and_then(|(i, s)| Ok((i, Term::Var(s.to_string()))))
     } else {
         Err(Err::Error(("var", ErrorKind::Alpha)))
     }

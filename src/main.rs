@@ -23,18 +23,20 @@ fn main() {
         if input == HALT_MESSAGE {
             break;
         }
+
         let Status { done, var_to_term } = app.handle_query(&input);
         if done {
-            println!("true");
-            app.asked_vars
-                .iter()
-                .for_each(|var| println!("{} = {:?}", var, var_to_term.get(var)));
+            println!("true.");
+            println!("var_to_term {:?}", var_to_term);
+            //app.asked_vars
+            //.iter()
+            //.for_each(|var| println!("{} = {:?}", var, substs.get(var)));
             app.asked_vars.clear();
         } else {
             println!("{:?}", var_to_term);
-            app.asked_vars
-                .iter()
-                .for_each(|var| println!("{} = {:?}", var, var_to_term.get(var)));
+            //app.asked_vars
+            //.iter()
+            //.for_each(|var| println!("{} = {:?}", var, substs.get(var)));
         }
     }
 }
