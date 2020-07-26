@@ -3,9 +3,9 @@
 Prolog-like logic language implemented in Rust.
 
 ## Usage
-It is basically same as (swipl)[https://www.swi-prolog.org/].
+It is basically same as [swipl](https://www.swi-prolog.org/).
 
-rules.pl
+`rules.pl`
 ```prolog
 male(kobo).
 male(koji).
@@ -46,4 +46,6 @@ true.
 - Performs occurence check in unification.
 
 ## TODO
-- Wait for user input to continue search or not after finding a solution as in swipl.
+- As in [swipl](https://www.swi-prolog.org/), ask user to continue search or not after finding a solution.
+- Implement Cut and Negation.
+- Implement built in functions and list syntax.
