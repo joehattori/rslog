@@ -58,7 +58,7 @@ impl App {
                         None => {
                             self.asked_vars.iter().for_each(|var| {
                                 search(&Term::Var(var.clone()), &subst)
-                                    .map(|t| println!("{} = {term}", var, term = t.to_string()));
+                                    .map(|t| println!("{} = {term}.", var, term = t.to_string()));
                             });
                             continue;
                             // TODO: return here and wait for user input (continue or not)

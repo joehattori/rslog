@@ -29,9 +29,10 @@ fn main() {
 
         let Status { done, subst } = app.handle_query(&input);
         if done {
+            println!("true.");
             app.asked_vars.iter().for_each(|var| {
                 search(&Term::Var(var.clone()), &subst)
-                    .map(|t| println!("{} = {term}", var, term = t.to_string()));
+                    .map(|t| println!("{} = {term}.", var, term = t.to_string()));
             });
             app.asked_vars.clear();
         } else {
