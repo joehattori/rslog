@@ -15,6 +15,7 @@ const HALT_MESSAGE: &'static str = "halt.";
 
 fn main() {
     let mut app = App::new();
+
     loop {
         print!("\n{}", PROMPT);
         let mut input = String::new();
@@ -28,17 +29,16 @@ fn main() {
 
         let Status { done, subst } = app.handle_query(&input);
         if done {
-            println!("true.");
             app.asked_vars.iter().for_each(|var| {
-                println!("{} = {:?}", var, search(&Term::Var(var.clone()), &subst))
+                search(&Term::Var(var.clone()), &subst)
+                    .map(|t| println!("{} = {term}", var, term = t.to_string()));
             });
             app.asked_vars.clear();
         } else {
-            println!("subst {:?}", subst);
-            app.asked_vars.iter().for_each(|var| {
-                println!("{} = {:?}", var, search(&Term::Var(var.clone()), &subst))
-            });
-            // TODO: wait for user input.
+            //println!("subst {:?}", subst);
+            //app.asked_vars.iter().for_each(|var| {
+            //    println!("{} = {:?}", var, search(&Term::Var(var.clone()), &subst))
+            //});
         }
     }
 }

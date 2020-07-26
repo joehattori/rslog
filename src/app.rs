@@ -3,7 +3,7 @@ use std::fs;
 
 use crate::expr::{Query, Rule, Term, Variable};
 use crate::parser::{parse_file_content, parse_query};
-use crate::unifier::{compose, unify, Subst};
+use crate::unifier::{compose, search, unify, Subst};
 
 pub struct App {
     pub rules: Vec<Rule>,
@@ -54,10 +54,15 @@ impl App {
                 });
 
                 while let Some(QueueItem { mut goals, subst }) = self.queue.pop_front() {
-                    println!("\ngoals: {:?}\nsubst: {:?}", goals, subst);
                     match &goals.pop() {
                         None => {
-                            return Status { done: false, subst };
+                            self.asked_vars.iter().for_each(|var| {
+                                search(&Term::Var(var.clone()), &subst)
+                                    .map(|t| println!("{} = {term}", var, term = t.to_string()));
+                            });
+                            continue;
+                            // TODO: return here and wait for user input (continue or not)
+                            //return Status { done: false, subst };
                         }
                         Some(goal) => {
                             for rule in self.rules.iter() {
@@ -71,13 +76,11 @@ impl App {
                                             Err(_) => continue,
                                             Ok(sub) => {
                                                 let new_subst = compose(&sub, &subst);
-                                                let goals_to_append = new_rule
-                                                    .rhs
+                                                let new_goals = vec![goals.clone(), new_rule.rhs]
+                                                    .concat()
                                                     .iter()
                                                     .map(|t| t.subst(&new_subst))
                                                     .collect();
-                                                let new_goals =
-                                                    vec![goals.clone(), goals_to_append].concat();
                                                 self.queue.push_back(QueueItem {
                                                     goals: new_goals,
                                                     subst: new_subst,

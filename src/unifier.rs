@@ -64,17 +64,21 @@ pub fn unify(constraints: &mut Vec<Constraint>) -> Result<Subst, String> {
     }
 }
 
-pub fn search(target: &Term, subst: &Subst) -> Term {
+pub fn search(target: &Term, subst: &Subst) -> Option<Term> {
     match target {
-        Term::Const(_) => target.clone(),
-        Term::Var(v) => {
-            let val = subst.get(v).expect(&format!("unbound variable {}", v));
-            search(&val, subst)
+        Term::Const(_) => Some(target.clone()),
+        Term::Var(v) => subst.get(v).map(|val| search(&val, subst)).flatten(),
+        Term::Combined { functor, args } => {
+            let new_args: Vec<Option<Term>> = args.iter().map(|arg| search(arg, subst)).collect();
+            if new_args.iter().any(|t| t.is_none()) {
+                None
+            } else {
+                Some(Term::Combined {
+                    functor: functor.clone(),
+                    args: args.iter().map(|arg| search(arg, subst).unwrap()).collect(),
+                })
+            }
         }
-        Term::Combined { functor, args } => Term::Combined {
-            functor: functor.clone(),
-            args: args.iter().map(|arg| search(arg, subst)).collect(),
-        },
     }
 }
 

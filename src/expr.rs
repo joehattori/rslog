@@ -122,6 +122,25 @@ impl Term {
             },
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Term::Const(c) => match c {
+                Constant::Int(i) => format!("{}", i),
+                Constant::Str(s) => format!("\"{}\"", s),
+                Constant::Name(name) => name.clone(),
+            },
+            Term::Var(v) => v.clone(),
+            Term::Combined { functor, args } => {
+                let args_str = args
+                    .iter()
+                    .map(|arg| arg.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                format!("{}({})", functor, args_str)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -139,7 +158,9 @@ pub struct Rule {
 
 impl Rule {
     pub fn instantiate(&self, vars_count: &mut i32, map: &Subst) -> Rule {
-        let free_vars = vec![self.lhs.free_vars(), Term::free_vars_sum(&self.rhs)].concat();
+        let mut free_vars = vec![self.lhs.free_vars(), Term::free_vars_sum(&self.rhs)].concat();
+        free_vars.sort();
+        free_vars.dedup();
         let number_map: Subst = free_vars
             .iter()
             .map(|v| {
